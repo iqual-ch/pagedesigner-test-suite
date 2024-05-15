@@ -1,6 +1,8 @@
-# Pagedesigner Test Suit
+# Pagedesigner Test Suite
 
-Ppackage containing tests for the Pagedesigner Suite of modules.
+Package containing tests for the Pagedesigner Suite of modules. These test are intended for testing the core Pagedesigner product on multiple website projects.
+
+These tests integrated seemlessly into [iqual's Drupal Platform](https://github.com/iqual-ch/drupal-platform).
 
 ## Tests
 
