@@ -20,10 +20,9 @@ class PagedesignerLoadingTest extends ExistingSiteSelenium2DriverTestBase {
   public function testPagedesignerLoadingOnHomepage() {
     $web_assert = $this->assertSession();
 
-    $author = $this->createUser([], null, true);
+    $author = $this->createUser([], NULL, TRUE);
 
     // We can login and browse admin pages.
-    // $this->drupalLogin($author, "Anmelden");
     if ($this->loggedInUser) {
       $this->drupalLogout();
     }
@@ -74,4 +73,5 @@ class PagedesignerLoadingTest extends ExistingSiteSelenium2DriverTestBase {
     // Close the pagedesigner.
     $result->click();
   }
+
 }

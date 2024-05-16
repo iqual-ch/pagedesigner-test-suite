@@ -27,9 +27,10 @@ class NodeCreationTest extends ExistingSiteBase {
    */
   public function testLlama() {
     // Creates a user. Will be automatically cleaned up at the end of the test.
-    $author = $this->createUser([], null, true);
+    $author = $this->createUser([], NULL, TRUE);
 
-    // Create a "Llama" article. Will be automatically cleaned up at end of test.
+    // Create a "Llama" article.
+    // Will be automatically cleaned up at end of test.
     $node = $this->createNode([
       'title' => 'Llama',
       'type' => 'page',
