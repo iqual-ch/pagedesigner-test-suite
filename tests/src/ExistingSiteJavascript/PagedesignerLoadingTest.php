@@ -61,10 +61,13 @@ class PagedesignerLoadingTest extends ExistingSiteSelenium2DriverTestBase {
     $result = $web_assert->waitForElementVisible('css', 'iframe.gjs-frame');
     $this->assertNotNull($result, "Pagedesigner did not load.");
     $web_assert->assertVisibleInViewport('css', 'iframe.gjs-frame');
-
+    
     // Test if iframe content loads.
     $this->getSession()->wait(15000, "document.querySelector('iframe.gjs-frame').contentDocument.readyState === 'complete'");
 
+    // Test that the edit icon is not visible.
+    $result = $web_assert->elementNotExists('css', '.pd-edit-icon');
+    
     // Test if the pagedesigner can be closed.
     $result = $this->getSession()->getPage()->find('css', '.gjs-pn-btn.fas.fa-times');
     $this->assertNotNull($result);
