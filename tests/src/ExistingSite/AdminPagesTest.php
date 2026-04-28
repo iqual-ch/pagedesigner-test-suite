@@ -70,6 +70,53 @@ class AdminPagesTest extends ExistingSiteBase {
     // We can browse admin pages.
     $this->drupalGet(Url::fromRoute('system.admin_content'));
     $this->assertSession()->statusCodeEquals(200);
+
+    // --- Pagedesigner-specific admin routes ---
+    // These routes are provided by the pagedesigner module and must remain
+    // accessible after core or contrib updates.
+    $pdAdminRoutes = [
+      'pagedesigner.admin',
+      'pagedesigner.settings',
+      'entity.pagedesigner_content.collection',
+      'entity.pagedesigner_type.collection',
+    ];
+
+    foreach ($pdAdminRoutes as $routeName) {
+      $this->drupalGet(Url::fromRoute($routeName));
+      $this->assertSession()->statusCodeEquals(200, "Pagedesigner admin route '$routeName' must return 200.");
+    }
+  }
+
+  /**
+   * Tests that anonymous users are denied access to the Pagedesigner editor.
+   *
+   * Catches regressions in the permission check on pagedesigner.node.edit_mode
+   * that could allow unauthenticated access to the page builder.
+   *
+   * @throws \Drupal\Core\Entity\EntityStorageException
+   */
+  public function testAnonymousCannotAccessPagedesignerEditor(): void {
+    // Ensure no session is active.
+    if ($this->loggedInUser) {
+      $this->drupalLogout();
+    }
+
+    // Find the front-page node to use as the test target.
+    $frontPath = \Drupal::config('system.site')->get('page.front');
+    $frontUrl = \Drupal::service('path.validator')->getUrlIfValid($frontPath);
+    if (!$frontUrl || !$frontUrl->isRouted() || $frontUrl->getRouteName() !== 'entity.node.canonical') {
+      $this->markTestSkipped('Front page is not a node; skipping anonymous PD access test.');
+    }
+
+    $nid = $frontUrl->getRouteParameters()['node'];
+    $this->drupalGet('/node/' . $nid . '/pagedesigner');
+
+    $statusCode = $this->getSession()->getStatusCode();
+    $this->assertContains(
+      $statusCode,
+      [302, 403],
+      'Anonymous users must not access /node/{nid}/pagedesigner (got ' . $statusCode . ').'
+    );
   }
 
 }
