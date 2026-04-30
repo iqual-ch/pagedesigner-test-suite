@@ -24,12 +24,42 @@ class PagetreeTest extends ExistingSiteSelenium2DriverTestBase {
   use ScreenShotTrait;
 
   /**
+   * Finds the first PD-enabled content type on the site.
+   *
+   * Iterates all node types and returns the machine name of the first one
+   * that has a pagedesigner_item field, consistent with the discovery
+   * pattern used by PagedesignerEditSaveTest and PagedesignerAccessTest.
+   *
+   * @return string
+   *   The node type machine name.
+   */
+  protected function getFirstPdNodeType(): string {
+    /** @var \Drupal\pagedesigner\PagedesignerServiceInterface $pdService */
+    $pdService = \Drupal::service('pagedesigner.service');
+    $nodeTypes = \Drupal::entityTypeManager()
+      ->getStorage('node_type')
+      ->loadMultiple();
+
+    foreach ($nodeTypes as $nodeType) {
+      $tempNode = Node::create(['type' => $nodeType->id(), 'title' => 'PD type discovery']);
+      $pdFields = $pdService->getPagedesignerFields($tempNode);
+      if (!empty($pdFields)) {
+        return $nodeType->id();
+      }
+    }
+
+    $this->fail('No content type with a pagedesigner_item field was found on this site.');
+  }
+
+  /**
    * Tests that a new page shows in the pagetree and can be published from it.
    */
   public function testPagetreeShowsAndPublishesNode(): void {
+    $nodeType = $this->getFirstPdNodeType();
+
     // Set up: unpublished node with a main-menu link so it shows in the tree.
     $node = Node::create([
-      'type' => 'page',
+      'type' => $nodeType,
       'title' => 'Pagetree regression test node',
       'status' => 0,
     ]);
@@ -60,11 +90,20 @@ class PagetreeTest extends ExistingSiteSelenium2DriverTestBase {
     $this->container->get('current_user')->setAccount($admin);
 
     // Visit a published node so frontendpublishing injects its modal templates.
+    // Look for any published node; create one if none exists.
     $publishedNodes = \Drupal::entityTypeManager()
       ->getStorage('node')
-      ->loadByProperties(['status' => 1, 'type' => 'page']);
+      ->loadByProperties(['status' => 1]);
     $publishedNode = reset($publishedNodes);
-    $this->assertNotNull($publishedNode, 'A published page node must exist for the pagetree test.');
+    if (!$publishedNode) {
+      $publishedNode = Node::create([
+        'type' => $nodeType,
+        'title' => 'Pagetree test published node',
+        'status' => 1,
+      ]);
+      $publishedNode->save();
+      $this->markEntityForCleanup($publishedNode);
+    }
     $this->drupalGet('/node/' . $publishedNode->id());
 
     // --- Phase 1: Pagetree icon is in the DOM ---
