@@ -2,17 +2,13 @@
 
 namespace PagedesignerTestSuite\Tests\ExistingSite;
 
-use Drupal\Core\Url;
-use Drupal\node\Entity\Node;
-use weitzman\DrupalTestTraits\ExistingSiteBase;
-
 /**
  * Tests access control for Pagedesigner routes.
  *
  * Catches regressions in the permission system and routing that could be
  * introduced by Drupal core or contrib module updates.
  */
-class PagedesignerAccessTest extends ExistingSiteBase {
+class PagedesignerAccessTest extends PagedesignerTestBase {
 
   /**
    * The node ID used for access testing.
@@ -26,8 +22,8 @@ class PagedesignerAccessTest extends ExistingSiteBase {
    */
   protected function setUp(): void {
     parent::setUp();
-    $this->failOnLoggedErrors();
-    $this->testNodeId = $this->getPagedesignerNodeId();
+    [$node] = $this->createPagedesignerTestNode('PD access test');
+    $this->testNodeId = (int) $node->id();
   }
 
   /**
@@ -69,33 +65,6 @@ class PagedesignerAccessTest extends ExistingSiteBase {
     $this->drupalGet('/node/' . $this->testNodeId . '/pagedesigner');
 
     $this->assertSession()->statusCodeEquals(200);
-  }
-
-  /**
-   * Returns the ID of a node with a pagedesigner_item field.
-   *
-   * Dynamically finds the first suitable node rather than hardcoding a type,
-   * making the test portable across all client projects.
-   *
-   * @return int
-   *   The node ID.
-   */
-  protected function getPagedesignerNodeId(): int {
-    /** @var \Drupal\pagedesigner\PagedesignerServiceInterface $pdService */
-    $pdService = \Drupal::service('pagedesigner.service');
-
-    $nodeTypes = \Drupal::entityTypeManager()->getStorage('node_type')->loadMultiple();
-    foreach ($nodeTypes as $nodeType) {
-      $tempNode = Node::create(['type' => $nodeType->id(), 'title' => 'PD access test']);
-      $pdFields = $pdService->getPagedesignerFields($tempNode);
-      if (!empty($pdFields)) {
-        $tempNode->setPublished()->save();
-        $this->markEntityForCleanup($tempNode);
-        return (int) $tempNode->id();
-      }
-    }
-
-    $this->fail('No content type with a pagedesigner_item field was found on this site.');
   }
 
 }

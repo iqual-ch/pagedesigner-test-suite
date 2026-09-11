@@ -2,8 +2,6 @@
 
 namespace PagedesignerTestSuite\Tests\ExistingSite;
 
-use weitzman\DrupalTestTraits\ExistingSiteBase;
-
 /**
  * Smoke tests for the Pagedesigner REST API endpoints.
  *
@@ -15,15 +13,7 @@ use weitzman\DrupalTestTraits\ExistingSiteBase;
  * Catches regressions in REST resource plugins, serialization, and permission
  * enforcement introduced by Drupal core or contrib updates.
  */
-class PagedesignerRestApiTest extends ExistingSiteBase {
-
-  /**
-   * {@inheritdoc}
-   */
-  protected function setUp(): void {
-    parent::setUp();
-    $this->failOnLoggedErrors();
-  }
+class PagedesignerRestApiTest extends PagedesignerTestBase {
 
   /**
    * Tests the pattern resource returns a valid list of patterns.
@@ -34,8 +24,7 @@ class PagedesignerRestApiTest extends ExistingSiteBase {
    * populate the GrapesJS blocks panel.
    */
   public function testPatternResourceReturnsPatterns(): void {
-    $admin = $this->createUser([], NULL, TRUE);
-    $this->drupalLogin($admin);
+    $this->loginAsAdmin();
 
     $this->drupalGet('/pagedesigner/pattern', ['query' => ['_format' => 'hal_json']]);
     $this->assertSession()->statusCodeEquals(200);
@@ -81,8 +70,7 @@ class PagedesignerRestApiTest extends ExistingSiteBase {
    * routing remain intact after updates.
    */
   public function testElementResourceAccessible(): void {
-    $admin = $this->createUser([], NULL, TRUE);
-    $this->drupalLogin($admin);
+    $this->loginAsAdmin();
 
     // GET a non-existent element — the important thing is that the resource
     // is routed (404) and not broken (500) or misconfigured (403/406).

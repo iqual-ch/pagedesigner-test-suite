@@ -4,7 +4,6 @@ namespace PagedesignerTestSuite\Tests\ExistingSite;
 
 use Drupal\node\Entity\Node;
 use Drupal\pagedesigner\Entity\ElementInterface;
-use weitzman\DrupalTestTraits\ExistingSiteBase;
 
 /**
  * Tests the Pagedesigner container lifecycle on the live database.
@@ -18,15 +17,7 @@ use weitzman\DrupalTestTraits\ExistingSiteBase;
  * pagedesigner_item field type, and the element entity that could be
  * introduced by Drupal core or contrib updates.
  */
-class PagedesignerContainerTest extends ExistingSiteBase {
-
-  /**
-   * {@inheritdoc}
-   */
-  protected function setUp(): void {
-    parent::setUp();
-    $this->failOnLoggedErrors();
-  }
+class PagedesignerContainerTest extends PagedesignerTestBase {
 
   /**
    * Tests that every PD-enabled content type auto-creates a container element.

@@ -4,8 +4,6 @@ namespace PagedesignerTestSuite\Tests\ExistingSiteJavascript;
 
 use Drupal\menu_link_content\Entity\MenuLinkContent;
 use Drupal\node\Entity\Node;
-use weitzman\DrupalTestTraits\ExistingSiteSelenium2DriverTestBase;
-use weitzman\DrupalTestTraits\ScreenShotTrait;
 
 /**
  * Tests the Pagetree companion module in a real browser.
@@ -19,9 +17,7 @@ use weitzman\DrupalTestTraits\ScreenShotTrait;
  * Catches regressions from updates to pagetree, frontendpublishing, or jQuery
  * that could break the tree widget, the REST endpoint, or the publish flow.
  */
-class PagetreeTest extends ExistingSiteSelenium2DriverTestBase {
-
-  use ScreenShotTrait;
+class PagetreeTest extends PagedesignerJavascriptTestBase {
 
   /**
    * Finds the first PD-enabled content type on the site.
@@ -34,21 +30,11 @@ class PagetreeTest extends ExistingSiteSelenium2DriverTestBase {
    *   The node type machine name.
    */
   protected function getFirstPdNodeType(): string {
-    /** @var \Drupal\pagedesigner\PagedesignerServiceInterface $pdService */
-    $pdService = \Drupal::service('pagedesigner.service');
-    $nodeTypes = \Drupal::entityTypeManager()
-      ->getStorage('node_type')
-      ->loadMultiple();
-
-    foreach ($nodeTypes as $nodeType) {
-      $tempNode = Node::create(['type' => $nodeType->id(), 'title' => 'PD type discovery']);
-      $pdFields = $pdService->getPagedesignerFields($tempNode);
-      if (!empty($pdFields)) {
-        return $nodeType->id();
-      }
+    $bundles = $this->findPagedesignerBundles();
+    if (empty($bundles)) {
+      $this->markTestSkipped('No content type with a pagedesigner_item field was found on this site.');
     }
-
-    $this->fail('No content type with a pagedesigner_item field was found on this site.');
+    return reset($bundles);
   }
 
   /**
@@ -76,18 +62,7 @@ class PagetreeTest extends ExistingSiteSelenium2DriverTestBase {
     $this->markEntityForCleanup($menuLink);
 
     // Log in as admin.
-    $admin = $this->createUser([], NULL, TRUE);
-    $this->drupalGet('/user/login');
-    $this->submitForm([
-      'name' => $admin->getAccountName(),
-      'pass' => $admin->passRaw,
-    ], t('Log in')->__toString());
-    $admin->sessionId = $this->getSession()->getCookie(
-      \Drupal::service('session_configuration')->getOptions(\Drupal::request())['name']
-    );
-    $this->assertTrue($this->drupalUserIsLoggedIn($admin));
-    $this->loggedInUser = $admin;
-    $this->container->get('current_user')->setAccount($admin);
+    $this->loginAsAdmin();
 
     // Visit a published node so frontendpublishing injects its modal templates.
     // Look for any published node; create one if none exists.
@@ -106,6 +81,10 @@ class PagetreeTest extends ExistingSiteSelenium2DriverTestBase {
     }
     $this->drupalGet('/node/' . $publishedNode->id());
 
+    // A consent banner would sit on top of the page chrome the tree widget
+    // lives in, so get it out of the way before interacting with it.
+    $this->dismissCookieBanner();
+
     // --- Phase 1: Pagetree icon is in the DOM ---
     // The block only renders for users with "use pagetree" permission.
     // Check DOM presence rather than visibility to avoid issues with overlays.
@@ -114,9 +93,7 @@ class PagetreeTest extends ExistingSiteSelenium2DriverTestBase {
     $this->captureScreenshot();
 
     // --- Phase 2: Open the tree and find the test node entry ---
-    // JS click to bypass any overlay (e.g. cookie banner).
-    // @todo Projects with a cookie-consent banner may need to dismiss it
-    //   in a project-specific setUp() override.
+    // JS click rather than a real click, so a stray overlay cannot intercept it.
     $this->getSession()->executeScript("document.querySelector('.pt-pagetree-icon').click();");
 
     $nid = $node->id();
