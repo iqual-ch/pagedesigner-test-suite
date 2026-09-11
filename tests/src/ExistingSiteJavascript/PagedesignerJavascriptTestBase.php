@@ -12,7 +12,7 @@ use weitzman\DrupalTestTraits\ScreenShotTrait;
  *
  * The browser counterpart of PagedesignerTestBase. Note it deliberately does
  * not call ::failOnLoggedErrors(): these tests drive a real browser against a
- * live client database, where an unrelated request can log an error inside the
+ * live database, where an unrelated request can log an error inside the
  * test's window. The ExistingSite tests carry that guard instead.
  */
 abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2DriverTestBase {
@@ -22,6 +22,8 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
 
   /**
    * Do not fail a test because the site logged a PHP notice or warning.
+   *
+   * @var bool
    *
    * @see \PagedesignerTestSuite\Tests\ExistingSite\PagedesignerTestBase::$failOnPhpWatchdogMessages
    */

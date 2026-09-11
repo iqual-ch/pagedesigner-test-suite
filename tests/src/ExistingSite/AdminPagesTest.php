@@ -23,6 +23,11 @@ class AdminPagesTest extends PagedesignerTestBase {
     // Get the front page node ID from the site configuration.
     $front_page_path = \Drupal::config('system.site')->get('page.front');
     $front_page_node = \Drupal::service('path.validator')->getUrlIfValid($front_page_path);
+    // A front page that is a view or a custom route is a legitimate
+    // configuration, not a regression, so its absence only drops this one
+    // assertion. The admin routes below do not depend on it and are checked
+    // either way.
+    $frontPageChecked = FALSE;
     if ($front_page_node && $front_page_node->isRouted() && $front_page_node->getRouteName() == 'entity.node.canonical') {
       $node_id = $front_page_node->getRouteParameters()['node'];
 
@@ -34,12 +39,7 @@ class AdminPagesTest extends PagedesignerTestBase {
       $edit_url = $node->toUrl('edit-form');
       $this->drupalGet($edit_url);
       $this->assertSession()->statusCodeEquals(200);
-    }
-    else {
-      // A front page that is a view or a custom route is a legitimate
-      // configuration, not a regression — and the same condition is already
-      // skipped rather than failed in ::testAnonymousCannotAccessPagedesignerEditor().
-      $this->markTestSkipped('Front page is not a node; skipping the node edit form check.');
+      $frontPageChecked = TRUE;
     }
 
     // We can browse admin pages, and the Pagedesigner admin routes must remain
@@ -69,9 +69,10 @@ class AdminPagesTest extends PagedesignerTestBase {
       $checked++;
     }
 
-    if ($checked === 0) {
+    if ($checked === 0 && !$frontPageChecked) {
       $this->markTestSkipped(
-        'This account may not access any of the admin routes under test ('
+        'Nothing in this test applies to the site: the front page is not a node, '
+        . 'and this account may not access any of the admin routes under test ('
         . implode(', ', $inaccessible) . ').'
       );
     }

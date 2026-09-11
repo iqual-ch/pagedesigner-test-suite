@@ -2,6 +2,7 @@
 
 namespace PagedesignerTestSuite\Tests\Traits;
 
+use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\node\Entity\Node;
 use Drupal\node\NodeInterface;
@@ -9,8 +10,8 @@ use Drupal\node\NodeInterface;
 /**
  * Discovers and creates the node the Pagedesigner tests run against.
  *
- * The suite has to work unchanged on ~50 client projects, none of which share a
- * content model. Every test therefore needs a node that
+ * The suite runs against existing sites rather than a fresh install, and no two
+ * of them share a content model. Every test therefore needs a node that
  * - lives on a content type that actually has a pagedesigner_item field,
  * - is genuinely published (not merely `setPublished()`, which a
  *   content_moderation workflow silently overrides),
@@ -177,7 +178,6 @@ trait PagedesignerTestNodeTrait {
 
         case 'string':
         case 'string_long':
-        case 'list_string':
           $node->set($name, 'Pagedesigner regression test');
           break;
 
@@ -202,8 +202,22 @@ trait PagedesignerTestNodeTrait {
         case 'decimal':
         case 'float':
         case 'boolean':
-        case 'list_integer':
           $node->set($name, 1);
+          break;
+
+        case 'list_string':
+        case 'list_integer':
+        case 'list_float':
+          // A list field accepts only its configured keys. Inventing a value
+          // would store an out-of-range entry no form could produce - the very
+          // invalid state this trait exists to avoid - and project code that
+          // looks the value up in the allowed list would be handed a NULL
+          // label for it.
+          $allowed = $this->allowedListValues($node, $definition);
+          if ($allowed === []) {
+            return FALSE;
+          }
+          $node->set($name, reset($allowed));
           break;
 
         case 'datetime':
@@ -216,6 +230,32 @@ trait PagedesignerTestNodeTrait {
     }
 
     return TRUE;
+  }
+
+  /**
+   * Returns the keys a list field will accept, in configured order.
+   *
+   * Resolved through options_allowed_values() rather than read straight off the
+   * storage setting, so that a field supplying its values from an
+   * allowed_values_function - and the list-of-tuples storage format used since
+   * Drupal 10.2 - resolve exactly as they would for a real form.
+   *
+   * @param \Drupal\node\NodeInterface $node
+   *   The node the field belongs to, passed on for per-entity value callbacks.
+   * @param \Drupal\Core\Field\FieldDefinitionInterface $definition
+   *   The field being populated.
+   *
+   * @return array
+   *   The allowed keys, or an empty array when none can be resolved.
+   */
+  protected function allowedListValues(NodeInterface $node, FieldDefinitionInterface $definition): array {
+    // Provided by the options module, which must be installed for a list field
+    // to exist in the first place.
+    if (!function_exists('options_allowed_values')) {
+      return [];
+    }
+    $allowed = options_allowed_values($definition->getFieldStorageDefinition(), $node);
+    return array_keys($allowed ?? []);
   }
 
   /**

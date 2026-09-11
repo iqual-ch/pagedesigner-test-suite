@@ -4,6 +4,7 @@ namespace PagedesignerTestSuite\Tests\ExistingSiteJavascript;
 
 use Drupal\menu_link_content\Entity\MenuLinkContent;
 use Drupal\node\Entity\Node;
+use Drupal\node\NodeInterface;
 
 /**
  * Tests the Pagetree companion module in a real browser.
@@ -20,37 +21,62 @@ use Drupal\node\Entity\Node;
 class PagetreeTest extends PagedesignerJavascriptTestBase {
 
   /**
-   * Finds the first PD-enabled content type on the site.
+   * Creates a saved Pagedesigner node in the requested publication state.
    *
-   * Iterates all node types and returns the machine name of the first one
-   * that has a pagedesigner_item field, consistent with the discovery
-   * pattern used by PagedesignerEditSaveTest and PagedesignerAccessTest.
+   * Discovery alone only settles the bundle. The node still has to satisfy that
+   * bundle's required fields, or it is saved in a state no editor could have
+   * produced and whichever project code renders it fails for the suite's own
+   * reasons. Bundles that cannot be populated are passed over rather than
+   * failed.
    *
-   * @return string
-   *   The node type machine name.
+   * @param string $title
+   *   The node title.
+   * @param bool $published
+   *   Whether the node should end up published.
+   *
+   * @return \Drupal\node\NodeInterface
+   *   The saved node, already marked for cleanup.
    */
-  protected function getFirstPdNodeType(): string {
+  protected function createPagetreeTestNode(string $title, bool $published): NodeInterface {
     $bundles = $this->findPagedesignerBundles();
     if (empty($bundles)) {
       $this->markTestSkipped('No content type with a pagedesigner_item field was found on this site.');
     }
-    return reset($bundles);
+
+    $rejected = [];
+    foreach ($bundles as $bundle) {
+      $node = Node::create(['type' => $bundle, 'title' => $title]);
+
+      if (!$this->fillRequiredFields($node)) {
+        $rejected[] = "$bundle has a required field the test cannot populate";
+        continue;
+      }
+      // Only a node that has to end up published needs its workflow resolved;
+      // an unpublished one is what a moderated bundle produces by default.
+      if ($published && !$this->setPublishedModerationState($node)) {
+        $rejected[] = "$bundle is moderated with no published state available";
+        continue;
+      }
+
+      $published ? $node->setPublished() : $node->setUnpublished();
+      $node->save();
+      $this->markEntityForCleanup($node);
+
+      return $node;
+    }
+
+    $this->markTestSkipped(
+      'No Pagedesigner content type on this site can host a test node: '
+      . implode('; ', $rejected) . '.'
+    );
   }
 
   /**
    * Tests that a new page shows in the pagetree and can be published from it.
    */
   public function testPagetreeShowsAndPublishesNode(): void {
-    $nodeType = $this->getFirstPdNodeType();
-
     // Set up: unpublished node with a main-menu link so it shows in the tree.
-    $node = Node::create([
-      'type' => $nodeType,
-      'title' => 'Pagetree regression test node',
-      'status' => 0,
-    ]);
-    $node->save();
-    $this->markEntityForCleanup($node);
+    $node = $this->createPagetreeTestNode('Pagetree regression test node', FALSE);
 
     $menuLink = MenuLinkContent::create([
       'title' => 'Pagetree regression test node',
@@ -66,18 +92,16 @@ class PagetreeTest extends PagedesignerJavascriptTestBase {
 
     // Visit a published node so frontendpublishing injects its modal templates.
     // Look for any published node; create one if none exists.
-    $publishedNodes = \Drupal::entityTypeManager()
-      ->getStorage('node')
-      ->loadByProperties(['status' => 1]);
-    $publishedNode = reset($publishedNodes);
+    // Ask for one id rather than loadByProperties(['status' => 1]), which on a
+    // real site loads every published node on it into memory.
+    $publishedIds = \Drupal::entityQuery('node')
+      ->accessCheck(FALSE)
+      ->condition('status', 1)
+      ->range(0, 1)
+      ->execute();
+    $publishedNode = $publishedIds ? Node::load(reset($publishedIds)) : NULL;
     if (!$publishedNode) {
-      $publishedNode = Node::create([
-        'type' => $nodeType,
-        'title' => 'Pagetree test published node',
-        'status' => 1,
-      ]);
-      $publishedNode->save();
-      $this->markEntityForCleanup($publishedNode);
+      $publishedNode = $this->createPagetreeTestNode('Pagetree test published node', TRUE);
     }
     $this->drupalGet('/node/' . $publishedNode->id());
 
@@ -151,7 +175,7 @@ class PagetreeTest extends PagedesignerJavascriptTestBase {
     // Allow time for the AJAX publish request to complete, then verify via PHP.
     $this->getSession()->wait(5000, 'false');
     \Drupal::entityTypeManager()->getStorage('node')->resetCache([$node->id()]);
-    $freshNode = \Drupal\node\Entity\Node::load($node->id());
+    $freshNode = Node::load($node->id());
     $this->assertTrue($freshNode->isPublished(), 'The node must be published after triggering publish from the pagetree context menu.');
     $this->captureScreenshot();
   }

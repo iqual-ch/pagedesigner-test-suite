@@ -2,7 +2,6 @@
 
 namespace PagedesignerTestSuite\Tests\ExistingSiteJavascript;
 
-
 /**
  * Tests the Pagedesigner editor edit → render round-trip in a real browser.
  *
