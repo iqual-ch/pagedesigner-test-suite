@@ -61,8 +61,14 @@ class PagetreeTest extends PagedesignerJavascriptTestBase {
       $published ? $node->setPublished() : $node->setUnpublished();
       $node->save();
       $this->markEntityForCleanup($node);
+      \Drupal::entityTypeManager()->getStorage('node')->resetCache([$node->id()]);
+      $fresh = Node::load($node->id());
+      if ($published ? !$fresh->isPublished() : $fresh->isPublished()) {
+        $rejected[] = "$bundle did not save in the requested publication state";
+        continue;
+      }
 
-      return $node;
+      return $fresh;
     }
 
     $this->markTestSkipped(
