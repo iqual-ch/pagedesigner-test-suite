@@ -18,7 +18,7 @@ class AdminPagesTest extends PagedesignerTestBase {
    * @throws \Behat\Mink\Exception\ExpectationException
    */
   public function testAdminPages() {
-    $author = $this->loginAsAdmin();
+    $this->loginAsAdmin();
 
     // Get the front page node ID from the site configuration.
     $front_page_path = \Drupal::config('system.site')->get('page.front');
@@ -27,7 +27,6 @@ class AdminPagesTest extends PagedesignerTestBase {
     // configuration, not a regression, so its absence only drops this one
     // assertion. The admin routes below do not depend on it and are checked
     // either way.
-    $frontPageChecked = FALSE;
     if ($front_page_node && $front_page_node->isRouted() && $front_page_node->getRouteName() == 'entity.node.canonical') {
       $node_id = $front_page_node->getRouteParameters()['node'];
 
@@ -39,11 +38,12 @@ class AdminPagesTest extends PagedesignerTestBase {
       $edit_url = $node->toUrl('edit-form');
       $this->drupalGet($edit_url);
       $this->assertSession()->statusCodeEquals(200);
-      $frontPageChecked = TRUE;
     }
 
     // We can browse admin pages, and the Pagedesigner admin routes must remain
-    // accessible after core or contrib updates.
+    // accessible after core or contrib updates. The account is a full
+    // administrator, so anything but a 200 here - including a route that no
+    // longer exists - is a regression, not a site-specific permission model.
     $routes = [
       'system.admin_content',
       'pagedesigner.admin',
@@ -52,29 +52,9 @@ class AdminPagesTest extends PagedesignerTestBase {
       'entity.pagedesigner_type.collection',
     ];
 
-    $checked = 0;
-    $inaccessible = [];
-    $accessManager = \Drupal::service('access_manager');
     foreach ($routes as $routeName) {
-      // Asserting 200 only makes sense where this account is actually granted
-      // access. On a site whose administrator role is deliberately restricted,
-      // asserting 200 would test the site's permission model rather than the
-      // health of the route.
-      if (!$accessManager->checkNamedRoute($routeName, [], $author)) {
-        $inaccessible[] = $routeName;
-        continue;
-      }
       $this->drupalGet(Url::fromRoute($routeName));
       $this->assertSession()->statusCodeEquals(200, "Route '$routeName' must return 200.");
-      $checked++;
-    }
-
-    if ($checked === 0 && !$frontPageChecked) {
-      $this->markTestSkipped(
-        'Nothing in this test applies to the site: the front page is not a node, '
-        . 'and this account may not access any of the admin routes under test ('
-        . implode(', ', $inaccessible) . ').'
-      );
     }
   }
 

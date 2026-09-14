@@ -21,23 +21,6 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
   use ScreenShotTrait;
 
   /**
-   * Submit button labels of the login form, per interface language.
-   *
-   * The form is driven in a real browser, so the label is whatever the site
-   * rendered for the negotiated language. Add a translation here if a client
-   * site uses one that is missing.
-   *
-   * @var string[]
-   */
-  protected const LOGIN_BUTTON_LABELS = [
-    'Login',
-    'Log in',
-    'Anmelden',
-    'Se connecter',
-    'Accedi',
-  ];
-
-  /**
    * Logs in a freshly created administrator through the login form.
    *
    * Deliberately drives the real login form instead of ::drupalLogin(), which
@@ -65,23 +48,24 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
       $this->drupalLogout();
     }
     $this->drupalGet('/user/login');
-    // A consent banner would cover the submit button.
+    // Best effort: a consent banner is what usually sits on top of the form.
     $this->dismissCookieBanner();
 
-    $page = $this->getSession()->getPage();
-    $page->fillField('name', $account->getAccountName());
-    $page->fillField('pass', $account->passRaw);
-    $button = NULL;
-    foreach (static::LOGIN_BUTTON_LABELS as $label) {
-      if ($button = $page->findButton($label)) {
-        break;
-      }
-    }
-    $this->assertNotNull($button, sprintf(
-      'The login form must render a submit button labelled one of "%s". Add the missing translation to LOGIN_BUTTON_LABELS.',
-      implode('", "', static::LOGIN_BUTTON_LABELS)
-    ));
-    $button->press();
+    $form = $this->assertSession()->elementExists('css', 'form#user-login-form');
+    $form->fillField('name', $account->getAccountName());
+    $form->fillField('pass', $account->passRaw);
+
+    // Locate the submit button by its name rather than its label: the label is
+    // rendered in whatever interface language the browser negotiated, the name
+    // is always "op". Core's own ::drupalLogout() does the same. Click it from
+    // JS so that an overlay the dismissal above did not know about cannot
+    // intercept the click; the form is still submitted by the browser.
+    $this->assertSession()->buttonExists('op', $form);
+    $this->getSession()->executeScript(
+      "document.querySelector('form#user-login-form [name=\"op\"]').click();"
+    );
+    // A JS click does not block until the resulting navigation has finished.
+    $this->assertSession()->waitForElementRemoved('css', 'form#user-login-form');
 
     $account->sessionId = $this->getSession()->getCookie(
       \Drupal::service('session_configuration')->getOptions(\Drupal::request())['name']
