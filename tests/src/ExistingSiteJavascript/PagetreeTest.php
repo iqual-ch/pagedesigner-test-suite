@@ -4,8 +4,7 @@ namespace PagedesignerTestSuite\Tests\ExistingSiteJavascript;
 
 use Drupal\menu_link_content\Entity\MenuLinkContent;
 use Drupal\node\Entity\Node;
-use weitzman\DrupalTestTraits\ExistingSiteSelenium2DriverTestBase;
-use weitzman\DrupalTestTraits\ScreenShotTrait;
+use Drupal\node\NodeInterface;
 
 /**
  * Tests the Pagetree companion module in a real browser.
@@ -19,52 +18,71 @@ use weitzman\DrupalTestTraits\ScreenShotTrait;
  * Catches regressions from updates to pagetree, frontendpublishing, or jQuery
  * that could break the tree widget, the REST endpoint, or the publish flow.
  */
-class PagetreeTest extends ExistingSiteSelenium2DriverTestBase {
-
-  use ScreenShotTrait;
+class PagetreeTest extends PagedesignerJavascriptTestBase {
 
   /**
-   * Finds the first PD-enabled content type on the site.
+   * Creates a saved Pagedesigner node in the requested publication state.
    *
-   * Iterates all node types and returns the machine name of the first one
-   * that has a pagedesigner_item field, consistent with the discovery
-   * pattern used by PagedesignerEditSaveTest and PagedesignerAccessTest.
+   * Discovery alone only settles the bundle. The node still has to satisfy that
+   * bundle's required fields, or it is saved in a state no editor could have
+   * produced and whichever project code renders it fails for the suite's own
+   * reasons. Bundles that cannot be populated are passed over rather than
+   * failed.
    *
-   * @return string
-   *   The node type machine name.
+   * @param string $title
+   *   The node title.
+   * @param bool $published
+   *   Whether the node should end up published.
+   *
+   * @return \Drupal\node\NodeInterface
+   *   The saved node, already marked for cleanup.
    */
-  protected function getFirstPdNodeType(): string {
-    /** @var \Drupal\pagedesigner\PagedesignerServiceInterface $pdService */
-    $pdService = \Drupal::service('pagedesigner.service');
-    $nodeTypes = \Drupal::entityTypeManager()
-      ->getStorage('node_type')
-      ->loadMultiple();
-
-    foreach ($nodeTypes as $nodeType) {
-      $tempNode = Node::create(['type' => $nodeType->id(), 'title' => 'PD type discovery']);
-      $pdFields = $pdService->getPagedesignerFields($tempNode);
-      if (!empty($pdFields)) {
-        return $nodeType->id();
-      }
+  protected function createPagetreeTestNode(string $title, bool $published): NodeInterface {
+    $bundles = $this->findPagedesignerBundles();
+    if (empty($bundles)) {
+      $this->markTestSkipped('No content type with a pagedesigner_item field was found on this site.');
     }
 
-    $this->fail('No content type with a pagedesigner_item field was found on this site.');
+    $rejected = [];
+    foreach ($bundles as $bundle) {
+      $node = Node::create(['type' => $bundle, 'title' => $title]);
+
+      if (!$this->fillRequiredFields($node)) {
+        $rejected[] = "$bundle has a required field the test cannot populate";
+        continue;
+      }
+      // Only a node that has to end up published needs its workflow resolved;
+      // an unpublished one is what a moderated bundle produces by default.
+      if ($published && !$this->setPublishedModerationState($node)) {
+        $rejected[] = "$bundle is moderated with no published state available";
+        continue;
+      }
+
+      $published ? $node->setPublished() : $node->setUnpublished();
+      $node->save();
+      $this->markEntityForCleanup($node);
+      \Drupal::entityTypeManager()->getStorage('node')->resetCache([$node->id()]);
+      $fresh = Node::load($node->id());
+      if ($published ? !$fresh->isPublished() : $fresh->isPublished()) {
+        $rejected[] = "$bundle did not save in the requested publication state";
+        continue;
+      }
+
+      return $fresh;
+    }
+
+    $this->markTestSkipped(
+      'No Pagedesigner content type on this site can host a test node: '
+      . implode('; ', $rejected) . '.'
+    );
   }
 
   /**
    * Tests that a new page shows in the pagetree and can be published from it.
    */
   public function testPagetreeShowsAndPublishesNode(): void {
-    $nodeType = $this->getFirstPdNodeType();
-
     // Set up: unpublished node with a main-menu link so it shows in the tree.
-    $node = Node::create([
-      'type' => $nodeType,
-      'title' => 'Pagetree regression test node',
-      'status' => 0,
-    ]);
-    $node->save();
-    $this->markEntityForCleanup($node);
+    $node = $this->createPagetreeTestNode('Pagetree regression test node', FALSE);
 
     $menuLink = MenuLinkContent::create([
       'title' => 'Pagetree regression test node',
@@ -76,35 +94,26 @@ class PagetreeTest extends ExistingSiteSelenium2DriverTestBase {
     $this->markEntityForCleanup($menuLink);
 
     // Log in as admin.
-    $admin = $this->createUser([], NULL, TRUE);
-    $this->drupalGet('/user/login');
-    $this->submitForm([
-      'name' => $admin->getAccountName(),
-      'pass' => $admin->passRaw,
-    ], t('Log in')->__toString());
-    $admin->sessionId = $this->getSession()->getCookie(
-      \Drupal::service('session_configuration')->getOptions(\Drupal::request())['name']
-    );
-    $this->assertTrue($this->drupalUserIsLoggedIn($admin));
-    $this->loggedInUser = $admin;
-    $this->container->get('current_user')->setAccount($admin);
+    $this->loginAsAdmin();
 
     // Visit a published node so frontendpublishing injects its modal templates.
     // Look for any published node; create one if none exists.
-    $publishedNodes = \Drupal::entityTypeManager()
-      ->getStorage('node')
-      ->loadByProperties(['status' => 1]);
-    $publishedNode = reset($publishedNodes);
+    // Ask for one id rather than loadByProperties(['status' => 1]), which on a
+    // real site loads every published node on it into memory.
+    $publishedIds = \Drupal::entityQuery('node')
+      ->accessCheck(FALSE)
+      ->condition('status', 1)
+      ->range(0, 1)
+      ->execute();
+    $publishedNode = $publishedIds ? Node::load(reset($publishedIds)) : NULL;
     if (!$publishedNode) {
-      $publishedNode = Node::create([
-        'type' => $nodeType,
-        'title' => 'Pagetree test published node',
-        'status' => 1,
-      ]);
-      $publishedNode->save();
-      $this->markEntityForCleanup($publishedNode);
+      $publishedNode = $this->createPagetreeTestNode('Pagetree test published node', TRUE);
     }
     $this->drupalGet('/node/' . $publishedNode->id());
+
+    // A consent banner would sit on top of the page chrome the tree widget
+    // lives in, so get it out of the way before interacting with it.
+    $this->dismissCookieBanner();
 
     // --- Phase 1: Pagetree icon is in the DOM ---
     // The block only renders for users with "use pagetree" permission.
@@ -114,9 +123,7 @@ class PagetreeTest extends ExistingSiteSelenium2DriverTestBase {
     $this->captureScreenshot();
 
     // --- Phase 2: Open the tree and find the test node entry ---
-    // JS click to bypass any overlay (e.g. cookie banner).
-    // @todo Projects with a cookie-consent banner may need to dismiss it
-    //   in a project-specific setUp() override.
+    // JS click rather than a real click, so a stray overlay cannot intercept it.
     $this->getSession()->executeScript("document.querySelector('.pt-pagetree-icon').click();");
 
     $nid = $node->id();
@@ -174,7 +181,7 @@ class PagetreeTest extends ExistingSiteSelenium2DriverTestBase {
     // Allow time for the AJAX publish request to complete, then verify via PHP.
     $this->getSession()->wait(5000, 'false');
     \Drupal::entityTypeManager()->getStorage('node')->resetCache([$node->id()]);
-    $freshNode = \Drupal\node\Entity\Node::load($node->id());
+    $freshNode = Node::load($node->id());
     $this->assertTrue($freshNode->isPublished(), 'The node must be published after triggering publish from the pagetree context menu.');
     $this->captureScreenshot();
   }

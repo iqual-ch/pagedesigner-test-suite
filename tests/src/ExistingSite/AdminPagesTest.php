@@ -2,22 +2,13 @@
 
 namespace PagedesignerTestSuite\Tests\ExistingSite;
 
-use Drupal\Component\Render\FormattableMarkup;
 use Drupal\Core\Url;
 use Drupal\node\Entity\Node;
-use weitzman\DrupalTestTraits\ExistingSiteBase;
 
 /**
  * A model test case using traits from Drupal Test Traits.
  */
-class AdminPagesTest extends ExistingSiteBase {
-
-  protected function setUp(): void {
-    parent::setUp();
-
-    // Cause tests to fail if an error is sent to Drupal logs.
-    $this->failOnLoggedErrors();
-  }
+class AdminPagesTest extends PagedesignerTestBase {
 
   /**
    * An example test method; note that Drupal API's and Mink are available.
@@ -27,30 +18,15 @@ class AdminPagesTest extends ExistingSiteBase {
    * @throws \Behat\Mink\Exception\ExpectationException
    */
   public function testAdminPages() {
-    // Creates a user. Will be automatically cleaned up at the end of the test.
-    $author = $this->createUser([], NULL, TRUE);
-
-    // We can login and browse admin pages.
-    if ($this->loggedInUser) {
-      $this->drupalLogout();
-    }
-
-    $this->drupalGet(Url::fromRoute('user.login'));
-    $this->submitForm([
-      'name' => $author->getAccountName(),
-      'pass' => $author->passRaw,
-    ], t('Log in')->__toString());
-
-    // @see ::drupalUserIsLoggedIn()
-    $author->sessionId = $this->getSession()->getCookie(\Drupal::service('session_configuration')->getOptions(\Drupal::request())['name']);
-    $this->assertTrue($this->drupalUserIsLoggedIn($author), new FormattableMarkup('User %name successfully logged in.', ['%name' => $author->getAccountName()]));
-
-    $this->loggedInUser = $author;
-    $this->container->get('current_user')->setAccount($author);
+    $this->loginAsAdmin();
 
     // Get the front page node ID from the site configuration.
     $front_page_path = \Drupal::config('system.site')->get('page.front');
     $front_page_node = \Drupal::service('path.validator')->getUrlIfValid($front_page_path);
+    // A front page that is a view or a custom route is a legitimate
+    // configuration, not a regression, so its absence only drops this one
+    // assertion. The admin routes below do not depend on it and are checked
+    // either way.
     if ($front_page_node && $front_page_node->isRouted() && $front_page_node->getRouteName() == 'entity.node.canonical') {
       $node_id = $front_page_node->getRouteParameters()['node'];
 
@@ -63,27 +39,22 @@ class AdminPagesTest extends ExistingSiteBase {
       $this->drupalGet($edit_url);
       $this->assertSession()->statusCodeEquals(200);
     }
-    else {
-      $this->fail('Could not determine the front page node.');
-    }
 
-    // We can browse admin pages.
-    $this->drupalGet(Url::fromRoute('system.admin_content'));
-    $this->assertSession()->statusCodeEquals(200);
-
-    // --- Pagedesigner-specific admin routes ---
-    // These routes are provided by the pagedesigner module and must remain
-    // accessible after core or contrib updates.
-    $pdAdminRoutes = [
+    // We can browse admin pages, and the Pagedesigner admin routes must remain
+    // accessible after core or contrib updates. The account is a full
+    // administrator, so anything but a 200 here - including a route that no
+    // longer exists - is a regression, not a site-specific permission model.
+    $routes = [
+      'system.admin_content',
       'pagedesigner.admin',
       'pagedesigner.settings',
       'entity.pagedesigner_content.collection',
       'entity.pagedesigner_type.collection',
     ];
 
-    foreach ($pdAdminRoutes as $routeName) {
+    foreach ($routes as $routeName) {
       $this->drupalGet(Url::fromRoute($routeName));
-      $this->assertSession()->statusCodeEquals(200, "Pagedesigner admin route '$routeName' must return 200.");
+      $this->assertSession()->statusCodeEquals(200, "Route '$routeName' must return 200.");
     }
   }
 

@@ -2,9 +2,6 @@
 
 namespace PagedesignerTestSuite\Tests\ExistingSite;
 
-use Drupal\node\Entity\Node;
-use weitzman\DrupalTestTraits\ExistingSiteBase;
-
 /**
  * Tests that Pagedesigner content renders correctly on the frontend.
  *
@@ -16,15 +13,7 @@ use weitzman\DrupalTestTraits\ExistingSiteBase;
  * Catches regressions in ElementViewBuilder, the field formatter, and the
  * Renderer service that could be introduced by Drupal core or contrib updates.
  */
-class PagedesignerRenderTest extends ExistingSiteBase {
-
-  /**
-   * {@inheritdoc}
-   */
-  protected function setUp(): void {
-    parent::setUp();
-    $this->failOnLoggedErrors();
-  }
+class PagedesignerRenderTest extends PagedesignerTestBase {
 
   /**
    * Tests the Pagedesigner frontend render pipeline.
@@ -33,7 +22,7 @@ class PagedesignerRenderTest extends ExistingSiteBase {
    * the element renders on both the public frontend and the PD edit view.
    */
   public function testPagedesignerElementRendersPipeline(): void {
-    [$node, $fieldName] = $this->createPagedesignerTestNode();
+    [$node, $fieldName] = $this->createPagedesignerTestNode('PD render test');
 
     /** @var \Drupal\pagedesigner\PagedesignerServiceInterface $pdService */
     $pdService = \Drupal::service('pagedesigner.service');
@@ -86,38 +75,16 @@ class PagedesignerRenderTest extends ExistingSiteBase {
 
     // --- Test 2: Pagedesigner edit view render ---
     // An admin user must be able to load the edit view without errors.
-    $admin = $this->createUser([], NULL, TRUE);
-    $this->drupalLogin($admin);
+    $this->loginAsAdmin();
 
     $this->drupalGet('/node/' . $node->id() . '/pagedesigner');
     $this->assertSession()->statusCodeEquals(200);
 
-    // The edit view must include the GrapesJS initialisation target.
+    // The edit view must include the GrapesJS initialisation target. The
+    // attribute is set as a render-array #prefix by the Container handler, so
+    // its absence means the pagedesigner field was never rendered on the page
+    // — usually a bundle whose node template does not output the field.
     $this->assertSession()->elementExists('css', '[data-gjs-type="container"]');
-  }
-
-  /**
-   * Creates a node on the first available PD-enabled content type.
-   *
-   * @return array{0: \Drupal\node\Entity\Node, 1: string}
-   *   The created node and the name of the pagedesigner_item field.
-   */
-  protected function createPagedesignerTestNode(): array {
-    /** @var \Drupal\pagedesigner\PagedesignerServiceInterface $pdService */
-    $pdService = \Drupal::service('pagedesigner.service');
-
-    $nodeTypes = \Drupal::entityTypeManager()->getStorage('node_type')->loadMultiple();
-    foreach ($nodeTypes as $nodeType) {
-      $tempNode = Node::create(['type' => $nodeType->id(), 'title' => 'PD render test']);
-      $pdFields = $pdService->getPagedesignerFields($tempNode);
-      if (!empty($pdFields)) {
-        $tempNode->setPublished()->save();
-        $this->markEntityForCleanup($tempNode);
-        return [$tempNode, array_key_first($pdFields)];
-      }
-    }
-
-    $this->fail('No content type with a pagedesigner_item field was found on this site.');
   }
 
 }

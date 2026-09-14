@@ -2,10 +2,6 @@
 
 namespace PagedesignerTestSuite\Tests\ExistingSiteJavascript;
 
-use Drupal\node\Entity\Node;
-use weitzman\DrupalTestTraits\ExistingSiteSelenium2DriverTestBase;
-use weitzman\DrupalTestTraits\ScreenShotTrait;
-
 /**
  * Tests the Pagedesigner editor edit → render round-trip in a real browser.
  *
@@ -20,9 +16,7 @@ use weitzman\DrupalTestTraits\ScreenShotTrait;
  * Catches regressions introduced by updates to the pagedesigner module,
  * GrapesJS, ui_patterns, or Drupal core rendering.
  */
-class PagedesignerEditSaveTest extends ExistingSiteSelenium2DriverTestBase {
-
-  use ScreenShotTrait;
+class PagedesignerEditSaveTest extends PagedesignerJavascriptTestBase {
 
   /**
    * Tests that elements added to a node render in the editor and on the frontend.
@@ -32,23 +26,7 @@ class PagedesignerEditSaveTest extends ExistingSiteSelenium2DriverTestBase {
    * This tests what would happen after a user saves content via the PD editor.
    */
   public function testElementRendersInEditorAndFrontend(): void {
-    $admin = $this->createUser([], NULL, TRUE);
-
-    // Log in using form submission (compatible with all auth setups).
-    if ($this->loggedInUser) {
-      $this->drupalLogout();
-    }
-    $this->drupalGet('/user/login');
-    $this->submitForm([
-      'name' => $admin->getAccountName(),
-      'pass' => $admin->passRaw,
-    ], t('Log in')->__toString());
-    $admin->sessionId = $this->getSession()->getCookie(
-      \Drupal::service('session_configuration')->getOptions(\Drupal::request())['name']
-    );
-    $this->assertTrue($this->drupalUserIsLoggedIn($admin));
-    $this->loggedInUser = $admin;
-    $this->container->get('current_user')->setAccount($admin);
+    $this->loginAsAdmin();
 
     // Set up a test node with a text element via the PHP API.
     // This simulates content that a user would have saved via the PD editor.
@@ -113,7 +91,7 @@ class PagedesignerEditSaveTest extends ExistingSiteSelenium2DriverTestBase {
    * Uses the PHP API directly to set up content — this avoids flaky drag-and-drop
    * in tests while still exercising the same data structures the editor creates.
    *
-   * @return array{0: \Drupal\node\Entity\Node, 1: string, 2: int}
+   * @return array{0: \Drupal\node\NodeInterface, 1: string, 2: int}
    *   The node, field name, and text element entity ID.
    */
   protected function createNodeWithTextElement(): array {
@@ -127,24 +105,7 @@ class PagedesignerEditSaveTest extends ExistingSiteSelenium2DriverTestBase {
     $patterns = $patternManager->getDefinitions();
     $this->assertArrayHasKey('text', $patterns, 'The "text" pattern must exist on all Pagedesigner projects.');
 
-    // Find the first PD-enabled content type.
-    $nodeTypes = \Drupal::entityTypeManager()->getStorage('node_type')->loadMultiple();
-    $node = NULL;
-    $fieldName = NULL;
-
-    foreach ($nodeTypes as $nodeType) {
-      $tempNode = Node::create(['type' => $nodeType->id(), 'title' => 'PD edit-save test']);
-      $pdFields = $pdService->getPagedesignerFields($tempNode);
-      if (!empty($pdFields)) {
-        $tempNode->setPublished()->save();
-        $this->markEntityForCleanup($tempNode);
-        $node = $tempNode;
-        $fieldName = array_key_first($pdFields);
-        break;
-      }
-    }
-
-    $this->assertNotNull($node, 'A PD-enabled content type must exist on this site.');
+    [$node, $fieldName] = $this->createPagedesignerTestNode('PD edit-save test');
 
     $container = $pdService->getContainer($node, $fieldName);
     $this->assertNotNull($container, 'A container must exist for the test node.');
