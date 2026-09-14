@@ -220,9 +220,10 @@ trait PagedesignerTestNodeTrait {
           $node->set($name, reset($allowed));
           break;
 
-        case 'datetime':
-          $node->set($name, date('Y-m-d'));
-          break;
+          $format = $definition->getFieldStorageDefinition()->getSetting('datetime_type') === 'date'
+            ? 'Y-m-d'
+            : 'Y-m-d\TH:i:s';
+          $node->set($name, date($format));
 
         default:
           return FALSE;
