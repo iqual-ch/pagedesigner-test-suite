@@ -21,36 +21,81 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
   use ScreenShotTrait;
 
   /**
-   * Do not fail a test because the site logged a PHP notice or warning.
+   * Submit button labels of the login form, per interface language.
    *
-   * @var bool
+   * The form is driven in a real browser, so the label is whatever the site
+   * rendered for the negotiated language. Add a translation here if a client
+   * site uses one that is missing.
    *
-   * @see \PagedesignerTestSuite\Tests\ExistingSite\PagedesignerTestBase::$failOnPhpWatchdogMessages
+   * @var string[]
    */
-  protected $failOnPhpWatchdogMessages = FALSE;
+  protected const LOGIN_BUTTON_LABELS = [
+    'Login',
+    'Log in',
+    'Anmelden',
+    'Se connecter',
+    'Accedi',
+  ];
 
   /**
-   * Logs in a freshly created administrator.
+   * Logs in a freshly created administrator through the login form.
    *
-   * Uses ::drupalLogin(), which authenticates through a one-time login URL. In
-   * a real browser that is the only reliable option: submitting the login form
-   * requires clicking a button whose label depends on the negotiated interface
-   * language and which a cookie-consent overlay will happily intercept.
+   * Deliberately drives the real login form instead of ::drupalLogin(), which
+   * on current Drupal cores authenticates through a one-time login URL. Going
+   * through the form keeps the full login process covered by the suite.
    *
    * @return \Drupal\user\UserInterface
    *   The administrator that is now logged in.
    */
   protected function loginAsAdmin(): UserInterface {
     $admin = $this->createUser([], NULL, TRUE);
-    $this->drupalLogin($admin);
+    $this->loginViaForm($admin);
     return $admin;
+  }
+
+  /**
+   * Logs a user in by submitting the login form in the browser.
+   *
+   * @param \Drupal\user\UserInterface $account
+   *   The account to log in. Its raw password must be set in ::$passRaw, as
+   *   ::createUser() does.
+   */
+  protected function loginViaForm(UserInterface $account): void {
+    if ($this->loggedInUser) {
+      $this->drupalLogout();
+    }
+    $this->drupalGet('/user/login');
+    // A consent banner would cover the submit button.
+    $this->dismissCookieBanner();
+
+    $page = $this->getSession()->getPage();
+    $page->fillField('name', $account->getAccountName());
+    $page->fillField('pass', $account->passRaw);
+    $button = NULL;
+    foreach (static::LOGIN_BUTTON_LABELS as $label) {
+      if ($button = $page->findButton($label)) {
+        break;
+      }
+    }
+    $this->assertNotNull($button, sprintf(
+      'The login form must render a submit button labelled one of "%s". Add the missing translation to LOGIN_BUTTON_LABELS.',
+      implode('", "', static::LOGIN_BUTTON_LABELS)
+    ));
+    $button->press();
+
+    $account->sessionId = $this->getSession()->getCookie(
+      \Drupal::service('session_configuration')->getOptions(\Drupal::request())['name']
+    );
+    $this->assertTrue($this->drupalUserIsLoggedIn($account), 'Submitting the login form must log the user in.');
+    $this->loggedInUser = $account;
+    $this->container->get('current_user')->setAccount($account);
   }
 
   /**
    * Dismisses a cookie-consent banner if one is covering the page.
    *
-   * Only needed for tests that click something in the page chrome; logging in
-   * no longer goes through the form, so it is not needed for authentication.
+   * Called before submitting the login form and before tests click something
+   * in the page chrome.
    */
   protected function dismissCookieBanner(): void {
     $this->getSession()->executeScript(
