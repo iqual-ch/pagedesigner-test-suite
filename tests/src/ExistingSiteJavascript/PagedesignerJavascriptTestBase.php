@@ -60,7 +60,10 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
     // is always "op". Core's own ::drupalLogout() does the same. Click it from
     // JS so that an overlay the dismissal above did not know about cannot
     // intercept the click; the form is still submitted by the browser.
-    $this->assertSession()->buttonExists('op', $form);
+    $button = $this->assertSession()->buttonExists('op', $form);
+    // Bot protection unlocks a form only on real interaction, which a
+    // synthetic click is not.
+    $button->mouseOver();
     $this->getSession()->executeScript(
       "document.querySelector('form#user-login-form [name=\"op\"]').click();"
     );
