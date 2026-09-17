@@ -22,6 +22,7 @@ abstract class PagedesignerTestBase extends ExistingSiteBase {
    */
   protected function setUp(): void {
     parent::setUp();
+    $this->useSiteDefaultLanguage();
     $this->failOnLoggedErrors();
   }
 

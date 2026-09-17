@@ -21,6 +21,14 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
   use ScreenShotTrait;
 
   /**
+   * {@inheritdoc}
+   */
+  protected function setUp(): void {
+    parent::setUp();
+    $this->useSiteDefaultLanguage();
+  }
+
+  /**
    * Logs in a freshly created administrator through the login form.
    *
    * Deliberately drives the real login form instead of ::drupalLogin(), which
