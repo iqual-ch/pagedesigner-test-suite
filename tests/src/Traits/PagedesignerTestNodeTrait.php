@@ -2,6 +2,7 @@
 
 namespace PagedesignerTestSuite\Tests\Traits;
 
+use Behat\Mink\Exception\UnsupportedDriverActionException;
 use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\node\Entity\Node;
@@ -25,6 +26,31 @@ use Drupal\node\NodeInterface;
  * legitimate configuration, not a regression.
  */
 trait PagedesignerTestNodeTrait {
+
+  /**
+   * Pins generated URLs and requests to the site default language.
+   *
+   * The test nodes are created in that language; browser or bootstrap
+   * Accept-Language headers must not negotiate another one.
+   */
+  protected function useSiteDefaultLanguage(): void {
+    if (!\Drupal::moduleHandler()->moduleExists('language')) {
+      return;
+    }
+    $default = \Drupal::languageManager()->getDefaultLanguage()->getId();
+
+    $request = \Drupal::request();
+    $request->headers->set('Accept-Language', $default);
+    $request->server->set('HTTP_ACCEPT_LANGUAGE', $default);
+    \Drupal::languageManager()->reset();
+
+    try {
+      $this->getSession()->setRequestHeader('Accept-Language', $default);
+    }
+    catch (UnsupportedDriverActionException $e) {
+      // A real browser (Selenium) decides its own headers.
+    }
+  }
 
   /**
    * Content types that are, by convention, standalone public pages.

@@ -20,6 +20,8 @@ Testing an empty Drupal installation with a clean database.
 
 Testing on the existing Drupal installation with the live database.
 
+All ExistingSite and ExistingSiteJavascript tests run in the site's default language: the URLs they generate carry its prefix and the non-JS client sends it as `Accept-Language`. On multilingual sites with browser-based language detection this keeps the test nodes (created in the default language) viewable, instead of the negotiated browser language producing 403s or translation errors.
+
 #### Admin Pages Test
 
 * Tests that Pagedesigner admin routes are accessible to administrators:
