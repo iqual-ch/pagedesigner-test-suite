@@ -134,10 +134,15 @@ class PagetreeTest extends PagedesignerJavascriptTestBase {
     $this->assertTrue((bool) $entryLoaded, 'The test node must appear in the pagetree after the tree loads.');
     $this->captureScreenshot();
 
-    // The node starts unpublished — the state icon must be fa-times-circle.
+    // The node starts unpublished, so the state icon must be fa-times-circle.
+    // The entry is keyed by the node's own langcode, which is not necessarily
+    // what the document language attribute says: a site may advertise a
+    // regional variant such as de-CH while its content language stays de.
+    $langcode = $node->language()->getId();
     $isUnpublished = $this->getSession()->evaluateScript(
       "(function() {" .
-      "  let e = document.querySelector('.pt-entry-{$nid}-' + document.documentElement.lang);" .
+      "  let e = document.querySelector('.pt-entry-{$nid}-{$langcode}')" .
+      "    || document.querySelector('.pt-main-entry[data-node-id=\"{$nid}\"]');" .
       "  return e ? e.querySelector('.pt-state.fa-times-circle') !== null : false;" .
       "})()"
     );

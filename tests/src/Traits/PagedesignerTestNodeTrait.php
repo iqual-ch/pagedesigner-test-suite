@@ -7,6 +7,8 @@ use Drupal\Core\Field\FieldDefinitionInterface;
 use Drupal\Core\Session\AnonymousUserSession;
 use Drupal\node\Entity\Node;
 use Drupal\node\NodeInterface;
+use Drupal\user\Entity\Role;
+use Drupal\user\UserInterface;
 
 /**
  * Discovers and creates the node the Pagedesigner tests run against.
@@ -26,6 +28,39 @@ use Drupal\node\NodeInterface;
  * legitimate configuration, not a regression.
  */
 trait PagedesignerTestNodeTrait {
+
+  /**
+   * Creates an administrator that also carries the site's own admin roles.
+   *
+   * ::createUser() generates an administrative role of its own. Sites that
+   * grant access by role rather than by permission, such as a content
+   * overview view restricted to the administrator role, do not accept that
+   * generated role, so the roles the site itself marks as administrative are
+   * added on top.
+   *
+   * @return \Drupal\user\UserInterface
+   *   The administrator, not yet logged in.
+   */
+  protected function createSiteAdmin(): UserInterface {
+    // Collected before the user is created, so the role ::createUser()
+    // generates is not picked up here.
+    $siteAdminRoles = [];
+    foreach (Role::loadMultiple() as $role) {
+      if ($role->isAdmin()) {
+        $siteAdminRoles[] = $role->id();
+      }
+    }
+
+    $admin = $this->createUser([], NULL, TRUE);
+    foreach ($siteAdminRoles as $roleId) {
+      $admin->addRole($roleId);
+    }
+    if (!empty($siteAdminRoles)) {
+      $admin->save();
+    }
+
+    return $admin;
+  }
 
   /**
    * Pins generated URLs and requests to the site default language.

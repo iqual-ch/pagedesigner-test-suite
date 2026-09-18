@@ -39,7 +39,7 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
    *   The administrator that is now logged in.
    */
   protected function loginAsAdmin(): UserInterface {
-    $admin = $this->createUser([], NULL, TRUE);
+    $admin = $this->createSiteAdmin();
     $this->loginViaForm($admin);
     return $admin;
   }
