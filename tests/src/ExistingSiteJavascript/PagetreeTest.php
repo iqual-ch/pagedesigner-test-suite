@@ -78,6 +78,26 @@ class PagetreeTest extends PagedesignerJavascriptTestBase {
   }
 
   /**
+   * Returns the bundles a published test page may be picked from.
+   *
+   * The pagetree block is placed per bundle on most sites; pagetree.settings
+   * lists the content types the tree manages, so those come first. Without
+   * that setting, every Pagedesigner bundle qualifies.
+   *
+   * @return string[]
+   *   Node type machine names, never empty.
+   */
+  protected function findPagetreeBundles(): array {
+    $bundles = $this->findPagedesignerBundles();
+    if (empty($bundles)) {
+      $this->markTestSkipped('No content type with a pagedesigner_item field was found on this site.');
+    }
+    $managed = array_values(array_filter((array) \Drupal::config('pagetree.settings')->get('contentTypes')));
+    $preferred = array_values(array_intersect($bundles, $managed));
+    return $preferred ?: $bundles;
+  }
+
+  /**
    * Tests that a new page shows in the pagetree and can be published from it.
    */
   public function testPagetreeShowsAndPublishesNode(): void {
@@ -97,12 +117,18 @@ class PagetreeTest extends PagedesignerJavascriptTestBase {
     $this->loginAsAdmin();
 
     // Visit a published node so frontendpublishing injects its modal templates.
-    // Look for any published node; create one if none exists.
-    // Ask for one id rather than loadByProperties(['status' => 1]), which on a
-    // real site loads every published node on it into memory.
+    // Look for a published node of a Pagedesigner bundle; create one if none
+    // exists. The bundle matters: projects with other content types (products,
+    // beers, dealers) usually restrict the pagetree block to their page
+    // bundles, and an unsorted query on a site like that comes back with
+    // whatever the status index yields first, which is not a page. Ask for one
+    // id rather than loading nodes, which on a real site would pull every
+    // published node into memory.
     $publishedIds = \Drupal::entityQuery('node')
       ->accessCheck(FALSE)
       ->condition('status', 1)
+      ->condition('type', $this->findPagetreeBundles(), 'IN')
+      ->sort('nid')
       ->range(0, 1)
       ->execute();
     $publishedNode = $publishedIds ? Node::load(reset($publishedIds)) : NULL;
