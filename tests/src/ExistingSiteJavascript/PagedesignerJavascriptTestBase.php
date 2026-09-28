@@ -75,7 +75,7 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
       $like = '%' . $database->escapeLike($needle) . '%';
       $database->delete('watchdog')
         ->condition('type', 'PHP', '=')
-        ->condition(->condition('OR')
+        ->condition($database->condition('OR')
           ->condition('message', $like, 'LIKE')
           ->condition('variables', $like, 'LIKE'))
         ->execute();
