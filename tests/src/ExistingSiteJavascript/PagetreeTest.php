@@ -27,7 +27,8 @@ class PagetreeTest extends PagedesignerJavascriptTestBase {
    * bundle's required fields, or it is saved in a state no editor could have
    * produced and whichever project code renders it fails for the suite's own
    * reasons. Bundles that cannot be populated are passed over rather than
-   * failed.
+   * failed. Candidates come from ::findPagetreeBundles(), so a created node
+   * lands in a bundle the pagetree manages, like the one the lookup picks.
    *
    * @param string $title
    *   The node title.
@@ -38,10 +39,7 @@ class PagetreeTest extends PagedesignerJavascriptTestBase {
    *   The saved node, already marked for cleanup.
    */
   protected function createPagetreeTestNode(string $title, bool $published): NodeInterface {
-    $bundles = $this->findPagedesignerBundles();
-    if (empty($bundles)) {
-      $this->markTestSkipped('No content type with a pagedesigner_item field was found on this site.');
-    }
+    $bundles = $this->findPagetreeBundles();
 
     $rejected = [];
     foreach ($bundles as $bundle) {
@@ -72,7 +70,7 @@ class PagetreeTest extends PagedesignerJavascriptTestBase {
     }
 
     $this->markTestSkipped(
-      'No Pagedesigner content type on this site can host a test node: '
+      'No pagetree content type on this site can host a test node: '
       . implode('; ', $rejected) . '.'
     );
   }

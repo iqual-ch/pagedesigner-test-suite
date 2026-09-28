@@ -40,11 +40,27 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
   ];
 
   /**
+   * The highest watchdog id before the test ran; only later rows are dropped.
+   *
+   * @var int
+   */
+  protected int $watchdogStartWid = 0;
+
+  /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
     parent::setUp();
     $this->useSiteDefaultLanguage();
+    $database = \Drupal::database();
+    if ($database->schema()->tableExists('watchdog')) {
+      $this->watchdogStartWid = (int) $database->select('watchdog', 'w')
+        ->fields('w', ['wid'])
+        ->orderBy('wid', 'DESC')
+        ->range(0, 1)
+        ->execute()
+        ->fetchField();
+    }
   }
 
   /**
@@ -59,9 +75,12 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
    * Deletes the PHP watchdog entries listed in ::$ignoredPhpWatchdogMessages.
    *
    * The parent's tearDown fails the test on any PHP entry logged during the
-   * test. The message text lives in the serialized variables column
-   * (the message column only holds the "%type: @message in %function"
-   * template), so the match runs on that column.
+   * test. Only rows written after ::setUp() are touched, so entries that were
+   * in the log before the test keep their history. The message text lives in
+   * the serialized variables column (the message column only holds the
+   * "%type: @message in %function" template), so the match runs on that
+   * column. The channel is matched as "php" and "PHP": dblog writes the
+   * former, the parent check reads the latter.
    */
   protected function dropIgnoredPhpWatchdogMessages(): void {
     if (!$this->failOnPhpWatchdogMessages || empty($this->ignoredPhpWatchdogMessages)) {
@@ -74,7 +93,8 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
     foreach ($this->ignoredPhpWatchdogMessages as $needle) {
       $like = '%' . $database->escapeLike($needle) . '%';
       $database->delete('watchdog')
-      ->condition('type', 'php', '=')
+        ->condition('wid', $this->watchdogStartWid, '>')
+        ->condition('type', ['php', 'PHP'], 'IN')
         ->condition($database->condition('OR')
           ->condition('message', $like, 'LIKE')
           ->condition('variables', $like, 'LIKE'))
