@@ -14,6 +14,11 @@ use weitzman\DrupalTestTraits\ScreenShotTrait;
  * not call ::failOnLoggedErrors(): these tests drive a real browser against a
  * live database, where an unrelated request can log an error inside the
  * test's window. The ExistingSite tests carry that guard instead.
+ *
+ * drupal-test-traits still fails a test when any PHP watchdog entry appears
+ * during it. A real browser triggers a few that are not errors of the site
+ * under test; ::$ignoredPhpWatchdogMessages lists them and ::tearDown() drops
+ * them before the check runs.
  */
 abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2DriverTestBase {
 
@@ -21,11 +26,60 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
   use ScreenShotTrait;
 
   /**
+   * Substrings of PHP watchdog messages that do not fail a browser test.
+   *
+   * - "Image generation in progress": the image module answers 503 while
+   *   another request holds the lock for the same derivative. A page with many
+   *   uncached image styles makes the browser race for them, and the 503 is
+   *   logged as a PHP exception although the derivative is served on retry.
+   *
+   * @var string[]
+   */
+  protected array $ignoredPhpWatchdogMessages = [
+    'Image generation in progress',
+  ];
+
+  /**
    * {@inheritdoc}
    */
   protected function setUp(): void {
     parent::setUp();
     $this->useSiteDefaultLanguage();
+  }
+
+  /**
+   * {@inheritdoc}
+   */
+  protected function tearDown(): void {
+    $this->dropIgnoredPhpWatchdogMessages();
+    parent::tearDown();
+  }
+
+  /**
+   * Deletes the PHP watchdog entries listed in ::$ignoredPhpWatchdogMessages.
+   *
+   * The parent's tearDown fails the test on any PHP entry logged during the
+   * test. The message text lives in the serialized variables column
+   * (the message column only holds the "%type: @message in %function"
+   * template), so the match runs on that column.
+   */
+  protected function dropIgnoredPhpWatchdogMessages(): void {
+    if (!$this->failOnPhpWatchdogMessages || empty($this->ignoredPhpWatchdogMessages)) {
+      return;
+    }
+    $database = \Drupal::database();
+    if (!$database->schema()->tableExists('watchdog')) {
+      return;
+    }
+    foreach ($this->ignoredPhpWatchdogMessages as $needle) {
+      $like = '%' . $database->escapeLike($needle) . '%';
+      $database->delete('watchdog')
+        ->condition('type', 'PHP', '=')
+        ->condition(->condition('OR')
+          ->condition('message', $like, 'LIKE')
+          ->condition('variables', $like, 'LIKE'))
+        ->execute();
+    }
   }
 
   /**
