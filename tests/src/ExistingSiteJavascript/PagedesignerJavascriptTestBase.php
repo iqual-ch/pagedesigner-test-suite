@@ -74,7 +74,7 @@ abstract class PagedesignerJavascriptTestBase extends ExistingSiteSelenium2Drive
     foreach ($this->ignoredPhpWatchdogMessages as $needle) {
       $like = '%' . $database->escapeLike($needle) . '%';
       $database->delete('watchdog')
-        ->condition('type', 'PHP', '=')
+      ->condition('type', 'php', '=')
         ->condition($database->condition('OR')
           ->condition('message', $like, 'LIKE')
           ->condition('variables', $like, 'LIKE'))
