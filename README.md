@@ -53,6 +53,12 @@ All ExistingSite and ExistingSiteJavascript tests run in the site's default lang
 * Verifies that unauthenticated access to the pattern endpoint is denied.
 * Verifies that the element REST endpoint is accessible with the correct credentials.
 
+#### Domain Record Hostname Test
+
+* Guards against a local hostname (`ddev.site`, `localhost`) in the exported domain records, which happens when a record is saved while the hostname override of a development environment is applied.
+* Reads the config sync directory, not the active configuration, where the override is legitimate.
+* Skipped on sites that export no domain records.
+
 ### Existing Site Javascript
 
 Testing on the existing Drupal installation with the live database and a full browser.
